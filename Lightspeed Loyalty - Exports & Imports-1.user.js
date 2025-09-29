@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Lightspeed Loyalty - Exports & Imports
 // @namespace    ls-loyalty-tools
-// @version      1
+// @version      1.1
 // @description  Export CSVs, import customers into Groups, and import New Customers
 // @match        https://loyalty.lightspeedapp.com/reports_points*
 // @match        https://loyalty.lightspeedapp.com/user_list*
 // @match        https://loyalty.lightspeedapp.com/sms_history*
 // @match        https://loyalty.lightspeedapp.com/segment_list*
+// @match        https://loyalty.lightspeedapp.com/reward_one_time_list*
 // @grant        none
 // ==/UserScript==
 (function () {
@@ -21,6 +22,7 @@
     if (location.pathname.includes('/user_list')) setupUsers();
     if (location.pathname.includes('/sms_history')) setupSMS();
     if (location.pathname.includes('/segment_list')) setupSegments();
+    if (location.pathname.includes('/reward_one_time_list')) setupOneTimeRewards();
   });
 
   function whenReady(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
@@ -85,9 +87,7 @@
   }
 
   function getShownTotal() {
-    const span = document.querySelector('#example_info [reup-loc-key-translated="SHOWING_RESULTS_OF_ENTRIES_STATEMENT_DATATABLE"]')
-      || document.querySelector('#example_info span')
-      || document.querySelector('.dataTables_info span');
+    const span = document.querySelector('#example_info [reup-loc-key-translated="SHOWING_RESULTS_OF_ENTRIES_STATEMENT_DATATABLE"]') || document.querySelector('#example_info span') || document.querySelector('.dataTables_info span');
     if (!span) return null;
     const raw = span.getAttribute('param2') || span.textContent || '';
     const n = parseInt(raw.replace(/[^\d]/g, ''), 10);
@@ -101,13 +101,7 @@
     const exportBtn = document.createElement('button'); exportBtn.textContent = 'Usage Export'; exportBtn.className = 'btn btn-primary btn-sm';
     const openBtn = document.createElement('button'); openBtn.textContent = 'Open JSON'; openBtn.className = 'btn btn-default btn-sm';
     bar.appendChild(exportBtn); bar.appendChild(openBtn);
-
-    openBtn.addEventListener('click', () => {
-      const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
-      const url = buildPointsURL({ iDisplayStart: 0, iDisplayLength: total });
-      setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.');
-    });
-
+    openBtn.addEventListener('click', () => { const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; } const url = buildPointsURL({ iDisplayStart: 0, iDisplayLength: total }); setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.'); });
     exportBtn.addEventListener('click', async () => {
       const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
       const locMap = buildLocationMap(); const header = ['Username', 'First name', 'Last name', 'Points', 'Source', 'Location', 'Time']; const rows = [];
@@ -137,7 +131,6 @@
     const exportBtn = document.createElement('button'); exportBtn.textContent = 'Escalation Export'; exportBtn.className = 'btn btn-primary btn-sm';
     const openBtn = document.createElement('button'); openBtn.textContent = 'Open JSON'; openBtn.className = 'btn btn-default btn-sm';
     bar.appendChild(exportBtn); bar.appendChild(openBtn);
-
     const addUserEl = document.querySelector('#Add_User');
     if (addUserEl) {
       const wrap = document.createElement('span'); wrap.style.marginLeft = '8px'; wrap.style.whiteSpace = 'nowrap';
@@ -146,7 +139,6 @@
       const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.accept = '.csv,.txt'; fileInput.style.display = 'none';
       wrap.appendChild(icon2); wrap.appendChild(importBtn); wrap.appendChild(fileInput);
       addUserEl.insertAdjacentElement('afterend', wrap);
-
       importBtn.addEventListener('click', () => fileInput.click());
       fileInput.addEventListener('change', async () => {
         const file = fileInput.files && fileInput.files[0]; if (!file) return;
@@ -155,19 +147,10 @@
         fileInput.value = '';
       });
     }
-
-    openBtn.addEventListener('click', () => {
-      const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
-      const { idx, dir } = getSortStateUsers(); const search = getUserSearch();
-      const url = buildUserListURL({ start: 0, length: total, sortIdx: idx, sortDir: dir, search });
-      setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.');
-    });
-
+    openBtn.addEventListener('click', () => { const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; } const { idx, dir } = getSortStateUsers(); const search = getUserSearch(); const url = buildUserListURL({ start: 0, length: total, sortIdx: idx, sortDir: dir, search }); setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.'); });
     exportBtn.addEventListener('click', async () => {
       const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
-      const { idx, dir } = getSortStateUsers(); const search = getUserSearch(); let sawOptIns = false;
-      const baseHeader = ['ID', 'Email', 'Phone number', 'First name', 'Last name', 'Created', 'Points'];
-      const rows = [];
+      const { idx, dir } = getSortStateUsers(); const search = getUserSearch(); let sawOptIns = false; const baseHeader = ['ID', 'Email', 'Phone number', 'First name', 'Last name', 'Created', 'Points']; const rows = [];
       try {
         for (let start = 0; start < total; start += CHUNK_SIZE) {
           const len = Math.min(CHUNK_SIZE, total - start);
@@ -202,18 +185,10 @@
     const exportBtn = document.createElement('button'); exportBtn.textContent = 'SMS Export'; exportBtn.className = 'btn btn-primary btn-sm';
     const openBtn = document.createElement('button'); openBtn.textContent = 'Open JSON'; openBtn.className = 'btn btn-default btn-sm';
     bar.appendChild(exportBtn); bar.appendChild(openBtn);
-
-    openBtn.addEventListener('click', () => {
-      const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
-      const { idx, dir } = getSortStateSMS(); const search = getSMSSearch();
-      const url = buildSMSURL({ start: 0, length: total, sortIdx: idx, sortDir: dir, search });
-      setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.');
-    });
-
+    openBtn.addEventListener('click', () => { const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; } const { idx, dir } = getSortStateSMS(); const search = getSMSSearch(); const url = buildSMSURL({ start: 0, length: total, sortIdx: idx, sortDir: dir, search }); setStatus({ icon, status }, 'working', 'Opening full JSON…'); window.open(url, '_blank'); setStatus({ icon, status }, 'done', 'Opened full JSON.'); });
     exportBtn.addEventListener('click', async () => {
       const total = getShownTotal(); if (!total) { setStatus({ icon, status }, 'idle', 'Could not detect total entry count.'); return; }
-      const { idx, dir } = getSortStateSMS(); const search = getSMSSearch();
-      const header = ['SMS message', 'Recipients', 'Date sent']; const rows = [];
+      const { idx, dir } = getSortStateSMS(); const search = getSMSSearch(); const header = ['SMS message', 'Recipients', 'Date sent']; const rows = [];
       try {
         for (let start = 0; start < total; start += CHUNK_SIZE) {
           const len = Math.min(CHUNK_SIZE, total - start);
@@ -246,13 +221,11 @@
         if (!segId) return;
         const readOnly = manageBtn.getAttribute('data-read-only') === 'true';
         const groupName = (tr.querySelector('td')?.textContent || '').trim();
-
         const wrap = document.createElement('span'); wrap.className = 'ls-seg-export-wrap'; wrap.style.whiteSpace = 'nowrap'; wrap.style.marginLeft = '8px';
         const icon = document.createElement('img'); icon.src = GIFS.idle; icon.width = 18; icon.height = 18; icon.style.verticalAlign = 'middle'; icon.style.marginRight = '6px'; icon.style.borderRadius = '3px';
         const exportBtn = document.createElement('button'); exportBtn.className = 'btn btn-xs btn-info'; exportBtn.style.marginRight = '6px'; exportBtn.textContent = 'Groups Export';
         const openBtn = document.createElement('button'); openBtn.className = 'btn btn-xs btn-default'; openBtn.style.marginRight = '6px'; openBtn.textContent = 'Open JSON';
         wrap.appendChild(icon); wrap.appendChild(exportBtn); wrap.appendChild(openBtn);
-
         let importBtn, fileInput;
         if (!readOnly) {
           importBtn = document.createElement('button'); importBtn.className = 'btn btn-xs btn-warning'; importBtn.textContent = 'Import customers into group';
@@ -261,7 +234,6 @@
           wrap.appendChild(importBtn); wrap.appendChild(fileInput);
         }
         actionsCell.appendChild(wrap);
-
         openBtn.addEventListener('click', async () => {
           icon.src = GIFS.working;
           const total = await getSegmentTotal(segId, groupName);
@@ -270,7 +242,6 @@
           window.open(url, '_blank');
           icon.src = GIFS.done;
         });
-
         exportBtn.addEventListener('click', async () => {
           icon.src = GIFS.working;
           try {
@@ -293,7 +264,6 @@
             icon.src = GIFS.done;
           } catch (e) { console.error(e); icon.src = GIFS.idle; }
         });
-
         if (importBtn && fileInput) {
           importBtn.addEventListener('click', () => fileInput.click());
           fileInput.addEventListener('change', async () => {
@@ -336,8 +306,130 @@
     mo.observe(document.body, { childList: true, subtree: true });
     scanAndAugment();
   }
-
   async function getSegmentTotal(segmentId, groupName) { const fallback = parseCountFromName(groupName); if (Number.isFinite(fallback) && fallback > 0) return fallback; try { const url = buildSegmentUsersURL({ segmentId, start: 0, length: 1, sortIdx: 0, sortDir: 'asc' }); const res = await fetch(url, { credentials: 'include' }); const data = await res.json(); const t = parseInt((data.iTotalDisplayRecords ?? data.iTotalRecords ?? 0), 10); return Number.isFinite(t) && t > 0 ? t : null; } catch { return null; } }
   function parseCountFromName(name) { const m = String(name || '').match(/\(([\d,]+)\)\s*$/); if (!m) return null; return parseInt(m[1].replace(/[^\d]/g, ''), 10) || null; }
   function buildSegmentUsersURL({ segmentId, start, length, sortIdx, sortDir }) { const base = new URL('/controllers/segment_list_user_controller.php', location.origin); const p = new URLSearchParams(); const iColumns = 4; p.set('getUsersBySegmentTable', String(segmentId)); p.set('sEcho', '1'); p.set('iColumns', String(iColumns)); p.set('sColumns', ''); p.set('iDisplayStart', String(start)); p.set('iDisplayLength', String(length)); for (let i = 0; i < iColumns; i++) { p.set(`mDataProp_${i}`, String(i)); p.set(`sSearch_${i}`, ''); p.set(`bRegex_${i}`, 'false'); p.set(`bSearchable_${i}`, 'true'); p.set(`bSortable_${i}`, i === 3 ? 'false' : 'true'); } p.set('sSearch', ''); p.set('bRegex', 'false'); p.set('iSortCol_0', String(sortIdx ?? 0)); p.set('sSortDir_0', sortDir || 'asc'); p.set('iSortingCols', '1'); p.set('_', String(Date.now())); base.search = p.toString(); return base.toString(); }
+
+  function setupOneTimeRewards() {
+    const scanAndAugment = () => {
+      const rows = document.querySelectorAll('tbody tr[id^="id_"]');
+      rows.forEach(tr => {
+        const btn = tr.querySelector('button.view-users[data-ontimerewardid], button.view-users[data-onetimerewardid]');
+        if (!btn) return;
+        const rewardId = btn.dataset.ontimerewardid || btn.dataset.onetimerewardid || (tr.id.match(/\d+/) || [])[0];
+        if (!rewardId) return;
+        const actionsCell = btn.closest('td') || tr.querySelectorAll('td')[3];
+        if (!actionsCell || actionsCell.querySelector('.ls-ot-export-wrap')) return;
+        const rewardName = (tr.querySelector('td')?.textContent || '').trim();
+        const wrap = document.createElement('span'); wrap.className = 'ls-ot-export-wrap'; wrap.style.whiteSpace = 'nowrap'; wrap.style.marginLeft = '8px';
+        const icon = document.createElement('img'); icon.src = GIFS.idle; icon.width = 18; icon.height = 18; icon.style.verticalAlign = 'middle'; icon.style.marginRight = '6px'; icon.style.borderRadius = '3px';
+        const exportBtn = document.createElement('button'); exportBtn.className = 'btn btn-xs btn-info'; exportBtn.style.marginRight = '6px'; exportBtn.textContent = 'One-Time Reward Export';
+        const openBtn   = document.createElement('button'); openBtn.className   = 'btn btn-xs btn-default'; openBtn.style.marginRight   = '6px'; openBtn.textContent   = 'Open JSON';
+        wrap.appendChild(icon); wrap.appendChild(exportBtn); wrap.appendChild(openBtn);
+        actionsCell.appendChild(wrap);
+        openBtn.addEventListener('click', async () => {
+          icon.src = GIFS.working;
+          const total = await getOneTimeRewardTotal(rewardId);
+          if (!total) { icon.src = GIFS.idle; return; }
+          const url = buildOneTimeRewardUsersURL({ rewardId, start: 0, length: total, sortIdx: 5, sortDir: 'desc' });
+          window.open(url, '_blank');
+          icon.src = GIFS.done;
+        });
+        exportBtn.addEventListener('click', async () => {
+          icon.src = GIFS.working;
+          try {
+            const total = await getOneTimeRewardTotal(rewardId);
+            if (!total) { icon.src = GIFS.idle; return; }
+            const header = ['User','First name','Last name','Source','Status','Date issued','Expiry date'];
+            const out = [];
+            for (let start = 0; start < total; start += CHUNK_SIZE) {
+              const len = Math.min(CHUNK_SIZE, total - start);
+              const url = buildOneTimeRewardUsersURL({ rewardId, start, length: len, sortIdx: 5, sortDir: 'desc' });
+              const res = await fetch(url, { credentials: 'include' });
+              const txt = await res.text();
+              let data; try { data = JSON.parse(txt); } catch { throw new Error('Bad JSON'); }
+              if (!data || !Array.isArray(data.aaData)) throw new Error('Unexpected response');
+              const fmt = d => {
+  if (!d) return '';
+  const dt = new Date(d.replace(' ', 'T') + 'Z');
+  if (isNaN(dt)) return String(d);
+  return dt.toLocaleString(undefined, {
+    month: 'short', day: '2-digit', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+};
+
+for (const r of data.aaData) {
+  const user = norm(cell(r, 0));
+  const first = norm(cell(r, 1));
+  const last = norm(cell(r, 2));
+  const sourceCode = String(cell(r, 3) ?? '').trim();
+  const statusCode = Number(cell(r, 4) ?? 0);
+  const issuedRaw = norm(cell(r, 5));
+  const expiryRaw = norm(cell(r, 6));
+
+  const sourceLabel = (typeof window.rewardSourceNames === 'object' && window.rewardSourceNames[sourceCode])
+    ? window.rewardSourceNames[sourceCode]
+    : sourceCode;
+
+  const expiryDate = expiryRaw ? new Date(expiryRaw.replace(' ', 'T') + 'Z') : null;
+  let statusLabel = '';
+  if (statusCode === 1) statusLabel = 'Redeemed';
+  else if (expiryDate && !isNaN(expiryDate) && expiryDate < new Date()) statusLabel = 'Expired';
+  else statusLabel = 'Issued';
+
+  out.push([
+    user,
+    first,
+    last,
+    sourceLabel,
+    statusLabel,
+    fmt(issuedRaw),
+    fmt(expiryRaw)
+  ]);
+}
+
+              await sleep(120);
+            }
+            const csv = toCSV([header, ...out]);
+            downloadCSV(csv, `one_time_reward_export_${slugify(rewardName)}_${new Date().toISOString().slice(0,10)}_${formatInt(total)}.csv`);
+            icon.src = GIFS.done;
+          } catch (e) {
+            console.error(e);
+            icon.src = GIFS.idle;
+          }
+        });
+      });
+    };
+    const mo = new MutationObserver(() => scanAndAugment());
+    mo.observe(document.body, { childList: true, subtree: true });
+    scanAndAugment();
+  }
+  async function getOneTimeRewardTotal(rewardId) {
+    try {
+      const url = buildOneTimeRewardUsersURL({ rewardId, start: 0, length: 1, sortIdx: 5, sortDir: 'desc' });
+      const res = await fetch(url, { credentials: 'include' });
+      const data = await res.json();
+      const t = parseInt((data.iTotalDisplayRecords ?? data.iTotalRecords ?? 0), 10);
+      return Number.isFinite(t) && t > 0 ? t : null;
+    } catch { return null; }
+  }
+  function buildOneTimeRewardUsersURL({ rewardId, start, length, sortIdx, sortDir }) {
+    const base = new URL('/controllers/one_time_reward_user_link_controller.php', location.origin);
+    const p = new URLSearchParams(); const iColumns = 8;
+    p.set('oneTimeRewardID', String(rewardId));
+    p.set('sEcho', '1'); p.set('iColumns', String(iColumns)); p.set('sColumns', '');
+    p.set('iDisplayStart', String(start)); p.set('iDisplayLength', String(length));
+    for (let i = 0; i < iColumns; i++) {
+      p.set(`mDataProp_${i}`, String(i));
+      p.set(`sSearch_${i}`, ''); p.set(`bRegex_${i}`, 'false');
+      p.set(`bSearchable_${i}`, 'true'); p.set(`bSortable_${i}`, 'true');
+    }
+    p.set('sSearch', ''); p.set('bRegex', 'false');
+    p.set('iSortCol_0', String(sortIdx ?? 5));
+    p.set('sSortDir_0', sortDir || 'desc');
+    p.set('iSortingCols', '1');
+    p.set('_', String(Date.now()));
+    base.search = p.toString(); return base.toString();
+  }
 })();
